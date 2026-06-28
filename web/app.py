@@ -246,32 +246,115 @@ def page_stats():
     with mc2:
         st.caption(f"期間：{start_year}〜{end_year}年 ／ 絞り込み：{filter_text}")
 
-    # アウトプット収集（絞り込み中の項目は除外）
-    outputs = []
-    if out_year:
-        outputs.append({
-            "label": f"年代（{granularity}年ごと）",
-            "group_expr": f"(year / {granularity}) * {granularity}",
-        })
+    # アウトプット収集
+    num_out_cols = [col for col, checked in out_nums.items() if checked and col not in filters]
+    bar_outputs = []
     if out_month and "month" not in filters:
-        outputs.append({"label": "月", "group_expr": "month"})
+        bar_outputs.append({"label": "月", "group_expr": "month"})
     if out_day and "day" not in filters:
-        outputs.append({"label": "日", "group_expr": "day"})
-    for col, checked in out_nums.items():
-        if checked and col not in filters:
-            outputs.append({"label": COL_LABEL.get(col, col), "group_expr": col})
+        bar_outputs.append({"label": "日", "group_expr": "day"})
+    if not out_year:
+        for col in num_out_cols:
+            bar_outputs.append({"label": COL_LABEL.get(col, col), "group_expr": col})
 
-    if not outputs:
+    if not out_year and not bar_outputs:
         st.info("アウトプットで見たい数字を選んでから集計してください。")
         return
 
-    # 各アウトプットのグラフ
-    for dim in outputs:
+    # ── ヒートマップ（年代 × 数字）──────────────────────────────────────────────
+    if out_year and num_out_cols:
+        hm_mode = st.radio(
+            "表示モード",
+            ["割合（%）", "偏差", "発生数"],
+            horizontal=True,
+            key="hm_mode",
+        )
+        for col in num_out_cols:
+            lbl = COL_LABEL.get(col, col)
+            st.divider()
+            st.subheader(f"📈 年代（{granularity}年ごと）× {lbl}")
+            q = f"""
+                SELECT (year / {granularity}) * {granularity} AS decade,
+                       {col} AS val,
+                       COUNT(*) AS cnt
+                FROM dates {where_all}
+                GROUP BY decade, val
+                ORDER BY decade, val
+            """
+            try:
+                df_h = run_query(q, all_params)
+            except Exception as e:
+                st.error(f"クエリエラー: {e}")
+                continue
+            if df_h.empty:
+                st.warning("該当するデータがありませんでした")
+                continue
+
+            pivot = df_h.pivot(index="val", columns="decade", values="cnt").fillna(0)
+            pivot.index = pivot.index.astype(int)
+            pivot = pivot.sort_index()
+            pivot.columns = [str(int(c)) for c in pivot.columns]
+
+            if hm_mode == "割合（%）":
+                display = pivot.div(pivot.sum(axis=0), axis=1) * 100
+                colorscale, midpoint, fmt, clabel = "Blues", None, ".1f", "割合（%）"
+            elif hm_mode == "偏差":
+                pct = pivot.div(pivot.sum(axis=0), axis=1) * 100
+                overall = pivot.sum(axis=1) / pivot.sum().sum() * 100
+                display = pct.sub(overall, axis=0)
+                colorscale, midpoint, fmt, clabel = "RdBu_r", 0.0, ".2f", "偏差（%pt）"
+            else:
+                display = pivot
+                colorscale, midpoint, fmt, clabel = "Blues", None, ".0f", "発生数"
+
+            fig = px.imshow(
+                display,
+                labels={"x": "年代", "y": lbl, "color": clabel},
+                title=f"{lbl} × 年代（{granularity}年ごと）の{clabel}",
+                color_continuous_scale=colorscale,
+                color_continuous_midpoint=midpoint,
+                text_auto=fmt,
+                aspect="auto",
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+    # ── 年代のみ → 通常バーチャート ──────────────────────────────────────────────
+    elif out_year:
+        st.divider()
+        lbl = f"年代（{granularity}年ごと）"
+        st.subheader(f"📈 {lbl}")
+        q = f"""
+            SELECT (year / {granularity}) * {granularity} AS val, COUNT(*) AS count
+            FROM dates {where_all}
+            GROUP BY val ORDER BY val
+        """
+        try:
+            df = run_query(q, all_params)
+        except Exception as e:
+            st.error(f"クエリエラー: {e}")
+        else:
+            if df.empty:
+                st.warning("該当するデータがありませんでした")
+            else:
+                bar_colors = ["orange" if is_zorome(v) else "#636EFA" for v in df["val"]]
+                df["割合(%)"] = (df["count"] / df["count"].sum() * 100).round(2)
+                df = df.rename(columns={"val": lbl, "count": "件数"})
+                df[lbl] = df[lbl].astype(str)
+                tab_g, tab_t = st.tabs(["グラフ", "数値表"])
+                with tab_g:
+                    fig = px.bar(df, x=lbl, y="割合(%)", title=f"{lbl}の分布（{total:,}件中）", text="割合(%)")
+                    fig.update_traces(marker_color=bar_colors, texttemplate="%{text:.1f}%", textposition="outside")
+                    fig.update_layout(yaxis_title="割合（%）")
+                    st.plotly_chart(fig, use_container_width=True)
+                with tab_t:
+                    st.dataframe(df[[lbl, "件数", "割合(%)"]], use_container_width=True, hide_index=True)
+
+    # ── 通常バーチャート（月・日・数字） ──────────────────────────────────────────
+    for dim in bar_outputs:
         st.divider()
         lbl = dim["label"]
         gexpr = dim["group_expr"]
         st.subheader(f"📈 {lbl}")
-
         q = f"""
             SELECT {gexpr} AS val, COUNT(*) AS count
             FROM dates {where_all}
@@ -282,28 +365,17 @@ def page_stats():
         except Exception as e:
             st.error(f"クエリエラー: {e}")
             continue
-
         if df.empty:
             st.warning("該当するデータがありませんでした")
             continue
-
         bar_colors = ["orange" if is_zorome(v) else "#636EFA" for v in df["val"]]
         df["割合(%)"] = (df["count"] / df["count"].sum() * 100).round(2)
         df = df.rename(columns={"val": lbl, "count": "件数"})
         df[lbl] = df[lbl].astype(str)
-
         tab_g, tab_t = st.tabs(["グラフ", "数値表"])
         with tab_g:
-            fig = px.bar(
-                df, x=lbl, y="割合(%)",
-                title=f"{lbl}の分布（{total:,}件中）",
-                text="割合(%)",
-            )
-            fig.update_traces(
-                marker_color=bar_colors,
-                texttemplate="%{text:.1f}%",
-                textposition="outside",
-            )
+            fig = px.bar(df, x=lbl, y="割合(%)", title=f"{lbl}の分布（{total:,}件中）", text="割合(%)")
+            fig.update_traces(marker_color=bar_colors, texttemplate="%{text:.1f}%", textposition="outside")
             fig.update_layout(yaxis_title="割合（%）")
             st.plotly_chart(fig, use_container_width=True)
         with tab_t:
