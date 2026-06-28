@@ -129,25 +129,15 @@ def page_stats():
     with st.sidebar:
         st.divider()
         with st.form("stats"):
-            # 期間・粒度
-            st.subheader("📅 期間・粒度")
+            # 絞り込み設定（0＝使わない）
+            st.subheader("🔍 絞り込み")
+            st.caption("0 のままにすると絞り込みません")
+
             c1, c2 = st.columns(2)
             with c1:
                 start_year = int(st.number_input("開始年", 1900, 2500, 1900, step=1))
             with c2:
                 end_year = int(st.number_input("終了年", 1900, 2500, 2500, step=1))
-            granularity = int(st.selectbox(
-                "年代粒度",
-                [1, 5, 10, 20, 50, 100],
-                index=2,
-                format_func=lambda x: f"{x}年ごと",
-            ))
-
-            st.divider()
-
-            # 絞り込み設定（0＝使わない）
-            st.subheader("🔍 絞り込み")
-            st.caption("0 のままにすると絞り込みません")
 
             c1, c2 = st.columns(2)
             with c1:
@@ -174,7 +164,17 @@ def page_stats():
             st.subheader("📊 アウトプット")
             st.caption("分布を出したい数字にチェック（複数可）")
 
-            out_year = st.checkbox(f"年代（{granularity}年ごと）")
+            c1, c2 = st.columns([1, 2])
+            with c1:
+                out_year = st.checkbox("年代")
+            with c2:
+                granularity = int(st.selectbox(
+                    "粒度",
+                    [1, 5, 10, 20, 50, 100],
+                    index=2,
+                    format_func=lambda x: f"{x}年ごと",
+                ))
+
             c1, c2 = st.columns(2)
             with c1:
                 out_month = st.checkbox("月", key="o_month")
