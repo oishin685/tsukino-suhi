@@ -61,7 +61,7 @@ for _g in NUMBER_GROUPS:
 
 
 def fmt_6(moto: int, kanzen: int) -> str:
-    return str(kanzen) if moto == kanzen else f"{moto} からの {kanzen}"
+    return str(kanzen) if moto == kanzen else f"{kanzen}／{moto}"
 
 
 def fmt_extra(moto: int, kanzen: int) -> str:
