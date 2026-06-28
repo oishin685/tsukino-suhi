@@ -290,32 +290,37 @@ def page_stats():
                 st.warning("該当するデータがありませんでした")
                 continue
 
-            pivot = df_h.pivot(index="val", columns="decade", values="cnt").fillna(0)
-            pivot.index = pivot.index.astype(int)
+            # 縦=年代、横=数字値
+            pivot = df_h.pivot(index="decade", columns="val", values="cnt").fillna(0)
+            pivot.index = [str(int(i)) for i in pivot.index]
             pivot = pivot.sort_index()
-            pivot.columns = [str(int(c)) for c in pivot.columns]
+            pivot.columns = pivot.columns.astype(int)
+            pivot = pivot.sort_index(axis=1)
 
             if hm_mode == "割合（%）":
-                display = pivot.div(pivot.sum(axis=0), axis=1) * 100
+                display = pivot.div(pivot.sum(axis=1), axis=0) * 100
                 colorscale, midpoint, fmt, clabel = "Blues", None, ".1f", "割合（%）"
             elif hm_mode == "偏差":
-                pct = pivot.div(pivot.sum(axis=0), axis=1) * 100
-                overall = pivot.sum(axis=1) / pivot.sum().sum() * 100
-                display = pct.sub(overall, axis=0)
+                pct = pivot.div(pivot.sum(axis=1), axis=0) * 100
+                overall = pivot.sum(axis=0) / pivot.sum().sum() * 100
+                display = pct.sub(overall, axis=1)
                 colorscale, midpoint, fmt, clabel = "RdBu_r", 0.0, ".2f", "偏差（%pt）"
             else:
                 display = pivot
                 colorscale, midpoint, fmt, clabel = "Blues", None, ".0f", "発生数"
 
+            n_cells = len(display.index) * len(display.columns)
+            height = min(max(400, len(display.index) * 30), 1000)
             fig = px.imshow(
                 display,
-                labels={"x": "年代", "y": lbl, "color": clabel},
-                title=f"{lbl} × 年代（{granularity}年ごと）の{clabel}",
+                labels={"x": lbl, "y": "年代", "color": clabel},
+                title=f"年代（{granularity}年ごと）× {lbl}の{clabel}",
                 color_continuous_scale=colorscale,
                 color_continuous_midpoint=midpoint,
-                text_auto=fmt,
+                text_auto=fmt if n_cells < 300 else False,
                 aspect="auto",
             )
+            fig.update_layout(height=height)
             st.plotly_chart(fig, use_container_width=True)
 
     # ── 年代のみ → 通常バーチャート ──────────────────────────────────────────────
