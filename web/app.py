@@ -76,6 +76,14 @@ def is_zorome(n) -> bool:
         return False
 
 
+def zorome_required_for(col: str) -> list:
+    if col.endswith("_kanzen"):
+        return [11, 22, 33]
+    elif col.endswith("_moto"):
+        return [11, 22, 33, 44, 55, 66, 77, 88, 99]
+    return []
+
+
 def run_query(sql: str, params: list) -> pd.DataFrame:
     cur = conn.execute(sql, params)
     if not cur.description:
@@ -292,10 +300,15 @@ def page_stats():
 
             # 縦=年代、横=数字値
             pivot = df_h.pivot(index="decade", columns="val", values="cnt").fillna(0)
+            pivot.columns = pivot.columns.astype(int)
+            # ゾロ目は必ず列として表示（値が0でも）
+            for z in zorome_required_for(col):
+                if z not in pivot.columns:
+                    pivot[z] = 0
+            pivot = pivot.sort_index(axis=1)
             pivot.index = [str(int(i)) for i in pivot.index]
             pivot = pivot.sort_index()
-            pivot.columns = pivot.columns.astype(int)
-            pivot = pivot.sort_index(axis=1)
+            pivot.columns = [str(c) for c in pivot.columns]  # 文字列化で補間tickを消す
 
             if hm_mode == "割合（%）":
                 display = pivot.div(pivot.sum(axis=1), axis=0) * 100
@@ -309,8 +322,19 @@ def page_stats():
                 display = pivot
                 colorscale, midpoint, fmt, clabel = "Blues", None, ".0f", "発生数"
 
+            # ゾロ目列にオレンジ枠を追加
+            col_list = list(display.columns)
+            zorome_shapes = [
+                dict(type="rect",
+                     x0=i - 0.5, x1=i + 0.5,
+                     y0=-0.5, y1=len(display.index) - 0.5,
+                     line=dict(color="orange", width=3),
+                     fillcolor="rgba(0,0,0,0)")
+                for i, c in enumerate(col_list) if is_zorome(int(c))
+            ]
+
             n_cells = len(display.index) * len(display.columns)
-            height = min(max(400, len(display.index) * 30), 1000)
+            height = min(max(600, len(display.index) * 60), 2000)
             fig = px.imshow(
                 display,
                 labels={"x": lbl, "y": "年代", "color": clabel},
@@ -320,7 +344,7 @@ def page_stats():
                 text_auto=fmt if n_cells < 300 else False,
                 aspect="auto",
             )
-            fig.update_layout(height=height)
+            fig.update_layout(height=height, shapes=zorome_shapes)
             st.plotly_chart(fig, use_container_width=True)
 
     # ── 年代のみ → 通常バーチャート ──────────────────────────────────────────────
@@ -373,6 +397,14 @@ def page_stats():
         if df.empty:
             st.warning("該当するデータがありませんでした")
             continue
+        # ゾロ目は必ずバーとして表示（値が0でも）
+        zorome_ensure = zorome_required_for(gexpr)
+        if zorome_ensure:
+            existing = set(int(v) for v in df["val"].tolist())
+            new_rows = [{"val": z, "count": 0} for z in zorome_ensure if z not in existing]
+            if new_rows:
+                df = pd.concat([df, pd.DataFrame(new_rows)], ignore_index=True)
+                df = df.sort_values("val").reset_index(drop=True)
         bar_colors = ["orange" if is_zorome(v) else "#636EFA" for v in df["val"]]
         df["割合(%)"] = (df["count"] / df["count"].sum() * 100).round(2)
         df = df.rename(columns={"val": lbl, "count": "件数"})
