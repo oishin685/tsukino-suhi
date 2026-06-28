@@ -299,9 +299,9 @@ def page_stats():
 
 # ── ナビゲーション ─────────────────────────────────────────────────────────────
 
-page = st.sidebar.radio("メニュー", ["🔍 日付検索", "📊 統計探索"], key="nav")
+page = st.sidebar.radio("メニュー", ["📊 統計探索", "🔍 日付検索"], key="nav")
 
-if page == "🔍 日付検索":
-    page_search()
-else:
+if page == "📊 統計探索":
     page_stats()
+else:
+    page_search()
