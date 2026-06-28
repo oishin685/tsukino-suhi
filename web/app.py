@@ -80,7 +80,7 @@ def run_query(sql: str, params: list) -> pd.DataFrame:
 
 def page_search():
     st.title("🌙 月の数秘®︎ 数字検索")
-    st.caption("生年月日を選ぶと、6つの数字とさらに見ていく数字が出ます")
+    st.caption("生年月日を選ぶと、6つの数字と本質・性格・統合数・素質が出ます")
 
     d = st.date_input(
         "生年月日",
@@ -100,13 +100,17 @@ def page_search():
     st.divider()
     st.subheader(f"{d.year}年{d.month}月{d.day}日")
 
-    cols = st.columns(2)
-    for i, (label, mc, kc) in enumerate(LABELS_6):
-        with cols[i % 2]:
+    row1 = st.columns(3)
+    for i, (label, mc, kc) in enumerate(LABELS_6[:3]):
+        with row1[i]:
+            st.metric(label=label, value=fmt_6(row[mc], row[kc]))
+
+    row2 = st.columns(3)
+    for i, (label, mc, kc) in enumerate(LABELS_6[3:]):
+        with row2[i]:
             st.metric(label=label, value=fmt_6(row[mc], row[kc]))
 
     st.divider()
-    st.caption("さらに見ていく数字")
     cols2 = st.columns(4)
     for i, (label, mc, kc) in enumerate(LABELS_EXTRA):
         with cols2[i]:
