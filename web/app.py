@@ -116,20 +116,16 @@ def page_search():
 # ── 統計探索ページ ─────────────────────────────────────────────────────────────
 
 def page_stats():
-    ROLE_OPTS = ["使わない", "絞り込み", "出力軸"]
-    TIME_ROLE_OPTS = ["使わない", "出力軸"]  # 年代は期間で絞るため絞り込み不可
-
     with st.sidebar:
         st.divider()
-        st.header("⚙️ 統計設定")
 
-        st.subheader("📅 期間")
+        # 期間・粒度
+        st.subheader("📅 期間・粒度")
         c1, c2 = st.columns(2)
         with c1:
             start_year = int(st.number_input("開始年", 1900, 2500, 1900, step=1, key="sy"))
         with c2:
             end_year = int(st.number_input("終了年", 1900, 2500, 2500, step=1, key="ey"))
-
         granularity = int(st.selectbox(
             "年代の集計粒度",
             [1, 5, 10, 20, 50, 100],
@@ -139,35 +135,56 @@ def page_stats():
         ))
 
         st.divider()
-        st.subheader("🔢 ディメンション設定")
-        st.caption("絞り込み＝値を指定して絞る　出力軸＝分布をグラフに出す")
 
-        dim_roles = {}
-        dim_values = {}
+        # ── 絞り込み設定 ────────────────────────────────────────────────────
+        st.subheader("🔍 絞り込み設定")
+        st.caption("チェックを入れると値を指定できます")
+        filters = {}
 
-        with st.expander("📆 時間軸（月・日・年代）", expanded=False):
-            for tl, tk, topts in [
-                ("月",   "month", ROLE_OPTS),
-                ("日",   "day",   ROLE_OPTS),
-                ("年代", "year",  TIME_ROLE_OPTS),
-            ]:
-                r = st.radio(tl, topts, horizontal=True, key=f"role_{tk}")
-                dim_roles[tk] = r
-                if r == "絞り込み":
-                    mv = 12 if tk == "month" else 31
-                    dim_values[tk] = int(st.number_input(
-                        f"{tl}の値", min_value=1, max_value=mv, value=1, key=f"val_{tk}"
-                    ))
+        for tl, tk, mx in [("月", "month", 12), ("日", "day", 31)]:
+            if st.checkbox(tl, key=f"use_{tk}"):
+                filters[tk] = int(st.number_input(
+                    f"{tl}の値", min_value=1, max_value=mx, value=1, key=f"val_{tk}"
+                ))
 
         for g in NUMBER_GROUPS:
-            with st.expander(g["name"], expanded=False):
-                for suffix, ck in [("一桁にした値", g["kanzen"]), ("元の数字", g["moto"])]:
-                    r = st.radio(suffix, ROLE_OPTS, horizontal=True, key=f"role_{ck}")
-                    dim_roles[ck] = r
-                    if r == "絞り込み":
-                        dim_values[ck] = int(st.number_input(
-                            "値", min_value=1, value=1, key=f"val_{ck}"
-                        ))
+            if st.checkbox(f"{g['name']}（一桁にした値）", key=f"use_{g['kanzen']}"):
+                filters[g["kanzen"]] = int(st.number_input(
+                    "値", min_value=1, value=1, key=f"val_{g['kanzen']}"
+                ))
+            if st.checkbox(f"{g['name']}（元の数字）", key=f"use_{g['moto']}"):
+                filters[g["moto"]] = int(st.number_input(
+                    "値", min_value=1, value=1, key=f"val_{g['moto']}"
+                ))
+
+        st.divider()
+
+        # ── アウトプット設定 ────────────────────────────────────────────────
+        st.subheader("📊 アウトプット設定")
+        st.caption("分布グラフを出したい数字を選んでください（複数可）")
+        outputs = []
+
+        if st.checkbox(f"年代（{granularity}年ごと）", key="out_year"):
+            outputs.append({
+                "label": f"年代（{granularity}年ごと）",
+                "group_expr": f"(year / {granularity}) * {granularity}",
+            })
+
+        for tl, tk in [("月", "month"), ("日", "day")]:
+            if st.checkbox(tl, key=f"out_{tk}"):
+                outputs.append({"label": tl, "group_expr": tk})
+
+        for g in NUMBER_GROUPS:
+            if st.checkbox(f"{g['name']}（一桁にした値）", key=f"out_{g['kanzen']}"):
+                outputs.append({
+                    "label": f"{g['name']}（一桁にした値）",
+                    "group_expr": g["kanzen"],
+                })
+            if st.checkbox(f"{g['name']}（元の数字）", key=f"out_{g['moto']}"):
+                outputs.append({
+                    "label": f"{g['name']}（元の数字）",
+                    "group_expr": g["moto"],
+                })
 
     # ── メイン ──────────────────────────────────────────────────────────────
     st.title("📊 月の数秘®︎ 統計探索")
@@ -176,133 +193,86 @@ def page_stats():
         st.error("開始年は終了年以下にしてください")
         return
 
-    # WHERE句を構築
+    # WHERE句
     base_params = [start_year, end_year]
     filter_parts = []
     filter_params = []
-    for ck, role in dim_roles.items():
-        if role == "絞り込み" and ck in dim_values:
-            filter_parts.append(f"{ck} = ?")
-            filter_params.append(dim_values[ck])
+    for col, val in filters.items():
+        filter_parts.append(f"{col} = ?")
+        filter_params.append(val)
 
-    where_base = "WHERE year >= ? AND year <= ?"
-    where_all = where_base + (" AND " + " AND ".join(filter_parts) if filter_parts else "")
+    where_all = "WHERE year >= ? AND year <= ?" + (
+        " AND " + " AND ".join(filter_parts) if filter_parts else ""
+    )
     all_params = base_params + filter_params
-    has_filters = bool(filter_parts)
 
     # 対象件数
     try:
-        total_count = int(run_query(
+        total = int(run_query(
             f"SELECT COUNT(*) AS n FROM dates {where_all}", all_params
         ).iloc[0]["n"])
     except Exception as e:
         st.error(f"クエリエラー: {e}")
         return
 
-    # サマリー表示
-    filter_keys = [ck for ck in dim_roles if dim_roles[ck] == "絞り込み"]
-    filter_text = "なし" if not filter_parts else "、".join(
-        f"{COL_TO_LABEL.get(ck, ck)} = {dim_values[ck]}" for ck in filter_keys if ck in dim_values
+    # 絞り込み条件サマリー
+    col_label = {"month": "月", "day": "日"}
+    for g in NUMBER_GROUPS:
+        col_label[g["kanzen"]] = f"{g['name']}（一桁にした値）"
+        col_label[g["moto"]] = f"{g['name']}（元の数字）"
+
+    filter_text = "なし" if not filters else "、".join(
+        f"{col_label.get(col, col)} = {val}" for col, val in filters.items()
     )
+
     mc1, mc2 = st.columns([1, 3])
     with mc1:
-        st.metric("対象件数", f"{total_count:,} 件")
+        st.metric("対象件数", f"{total:,} 件")
     with mc2:
         st.caption(f"期間：{start_year}〜{end_year}年 ／ 絞り込み：{filter_text}")
 
-    # 出力軸を収集
-    output_dims = []
-    for ck, role in dim_roles.items():
-        if role != "出力軸":
-            continue
-        if ck == "year":
-            lbl = f"年代（{granularity}年ごと）"
-            gexpr = f"(year / {granularity}) * {granularity}"
-        else:
-            lbl = COL_TO_LABEL.get(ck, ck)
-            gexpr = ck
-        output_dims.append({"label": lbl, "col": ck, "group_expr": gexpr})
-
-    if not output_dims:
-        st.info("サイドバーで「出力軸」を選ぶと分布グラフが表示されます。絞り込みと組み合わせて自由に探索できます。")
+    if not outputs:
+        st.info("サイドバーの「アウトプット設定」で見たい数字を選ぶとグラフが表示されます。")
         return
 
-    # 各出力軸の結果
-    for dim in output_dims:
+    # 各アウトプットのグラフ
+    for dim in outputs:
         st.divider()
-        st.subheader(f"📈 {dim['label']}")
-
-        gexpr = dim["group_expr"]
         lbl = dim["label"]
+        gexpr = dim["group_expr"]
+        st.subheader(f"📈 {lbl}")
 
-        q_filtered = f"""
+        q = f"""
             SELECT {gexpr} AS val, COUNT(*) AS count
             FROM dates {where_all}
             GROUP BY {gexpr} ORDER BY val
         """
-        q_total = f"""
-            SELECT {gexpr} AS val, COUNT(*) AS total
-            FROM dates {where_base}
-            GROUP BY {gexpr} ORDER BY val
-        """
-
         try:
-            df_f = run_query(q_filtered, all_params)
-            df_t = run_query(q_total, base_params)
+            df = run_query(q, all_params)
         except Exception as e:
             st.error(f"クエリエラー: {e}")
             continue
 
-        if df_f.empty:
-            st.warning("条件に一致するデータがありませんでした")
+        if df.empty:
+            st.warning("該当するデータがありませんでした")
             continue
 
-        df = df_f.merge(df_t, on="val", how="left")
-        df["絞り込み内の割合(%)"] = (df["count"] / df["count"].sum() * 100).round(2)
-        if has_filters:
-            df["グループ内の発生率(%)"] = (df["count"] / df["total"] * 100).round(4)
-
-        df = df.rename(columns={"val": lbl, "count": "件数", "total": "グループ合計"})
+        df["割合(%)"] = (df["count"] / df["count"].sum() * 100).round(2)
+        df = df.rename(columns={"val": lbl, "count": "件数"})
         df[lbl] = df[lbl].astype(str)
 
         tab_g, tab_t = st.tabs(["グラフ", "数値表"])
-
         with tab_g:
-            if has_filters:
-                gc1, gc2 = st.columns(2)
-                with gc1:
-                    fig1 = px.bar(
-                        df, x=lbl, y="絞り込み内の割合(%)",
-                        title="絞り込み内での分布",
-                        text="絞り込み内の割合(%)",
-                    )
-                    fig1.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
-                    fig1.update_layout(yaxis_title="割合（%）")
-                    st.plotly_chart(fig1, use_container_width=True)
-                with gc2:
-                    fig2 = px.bar(
-                        df, x=lbl, y="グループ内の発生率(%)",
-                        title="グループ全体に対する発生率",
-                        text="グループ内の発生率(%)",
-                    )
-                    fig2.update_traces(texttemplate="%{text:.3f}%", textposition="outside")
-                    fig2.update_layout(yaxis_title="発生率（%）")
-                    st.plotly_chart(fig2, use_container_width=True)
-            else:
-                fig = px.bar(
-                    df, x=lbl, y="絞り込み内の割合(%)",
-                    title=f"{lbl}の分布",
-                    text="絞り込み内の割合(%)",
-                )
-                fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
-                fig.update_layout(yaxis_title="割合（%）")
-                st.plotly_chart(fig, use_container_width=True)
-
+            fig = px.bar(
+                df, x=lbl, y="割合(%)",
+                title=f"{lbl}の分布（絞り込み {total:,} 件中）",
+                text="割合(%)",
+            )
+            fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
+            fig.update_layout(yaxis_title="割合（%）")
+            st.plotly_chart(fig, use_container_width=True)
         with tab_t:
-            show_cols = [lbl, "件数", "グループ合計", "絞り込み内の割合(%)"]
-            if has_filters:
-                show_cols.append("グループ内の発生率(%)")
-            st.dataframe(df[show_cols], use_container_width=True, hide_index=True)
+            st.dataframe(df[[lbl, "件数", "割合(%)"]], use_container_width=True, hide_index=True)
 
 
 # ── ナビゲーション ─────────────────────────────────────────────────────────────
