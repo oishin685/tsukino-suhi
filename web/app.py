@@ -119,99 +119,106 @@ def page_search():
 
 # ── 統計探索ページ ─────────────────────────────────────────────────────────────
 
+COL_LABEL = {"month": "月", "day": "日"}
+for _g in NUMBER_GROUPS:
+    COL_LABEL[_g["kanzen"]] = f"{_g['name']}（一桁にした値）"
+    COL_LABEL[_g["moto"]] = f"{_g['name']}（元の数字）"
+
+
 def page_stats():
     with st.sidebar:
         st.divider()
+        with st.form("stats"):
+            # 期間・粒度
+            st.subheader("📅 期間・粒度")
+            c1, c2 = st.columns(2)
+            with c1:
+                start_year = int(st.number_input("開始年", 1900, 2500, 1900, step=1))
+            with c2:
+                end_year = int(st.number_input("終了年", 1900, 2500, 2500, step=1))
+            granularity = int(st.selectbox(
+                "年代粒度",
+                [1, 5, 10, 20, 50, 100],
+                index=2,
+                format_func=lambda x: f"{x}年ごと",
+            ))
 
-        # 期間・粒度
-        st.subheader("📅 期間・粒度")
-        c1, c2 = st.columns(2)
-        with c1:
-            start_year = int(st.number_input("開始年", 1900, 2500, 1900, step=1, key="sy"))
-        with c2:
-            end_year = int(st.number_input("終了年", 1900, 2500, 2500, step=1, key="ey"))
-        granularity = int(st.selectbox(
-            "年代の集計粒度",
-            [1, 5, 10, 20, 50, 100],
-            index=2,
-            format_func=lambda x: f"{x}年ごと",
-            key="gran",
-        ))
+            st.divider()
 
-        st.divider()
+            # 絞り込み設定（0＝使わない）
+            st.subheader("🔍 絞り込み")
+            st.caption("0 のままにすると絞り込みません")
 
-        # ── 絞り込み設定 ────────────────────────────────────────────────────
-        st.subheader("🔍 絞り込み設定")
-        st.caption("チェックを入れると値を指定できます")
-        filters = {}
+            c1, c2 = st.columns(2)
+            with c1:
+                filt_month = int(st.number_input("月", 0, 12, 0, step=1))
+            with c2:
+                filt_day = int(st.number_input("日", 0, 31, 0, step=1))
 
-        for tl, tk, mx in [("月", "month", 12), ("日", "day", 31)]:
-            if st.checkbox(tl, key=f"use_{tk}"):
-                filters[tk] = int(st.number_input(
-                    f"{tl}の値", min_value=1, max_value=mx, value=1, key=f"val_{tk}"
-                ))
+            filt_nums = {}
+            for g in NUMBER_GROUPS:
+                st.caption(g["name"])
+                c1, c2 = st.columns(2)
+                with c1:
+                    filt_nums[g["kanzen"]] = int(st.number_input(
+                        "一桁", 0, value=0, step=1, key=f"f_{g['kanzen']}"
+                    ))
+                with c2:
+                    filt_nums[g["moto"]] = int(st.number_input(
+                        "元の数字", 0, value=0, step=1, key=f"f_{g['moto']}"
+                    ))
 
-        for g in NUMBER_GROUPS:
-            if st.checkbox(f"{g['name']}（一桁にした値）", key=f"use_{g['kanzen']}"):
-                filters[g["kanzen"]] = int(st.number_input(
-                    "値", min_value=1, value=1, key=f"val_{g['kanzen']}"
-                ))
-            if st.checkbox(f"{g['name']}（元の数字）", key=f"use_{g['moto']}"):
-                filters[g["moto"]] = int(st.number_input(
-                    "値", min_value=1, value=1, key=f"val_{g['moto']}"
-                ))
+            st.divider()
 
-        st.divider()
+            # アウトプット設定
+            st.subheader("📊 アウトプット")
+            st.caption("分布を出したい数字にチェック（複数可）")
 
-        # ── アウトプット設定 ────────────────────────────────────────────────
-        st.subheader("📊 アウトプット設定")
-        st.caption("分布グラフを出したい数字を選んでください（複数可）")
-        outputs = []
+            out_year = st.checkbox(f"年代（{granularity}年ごと）")
+            c1, c2 = st.columns(2)
+            with c1:
+                out_month = st.checkbox("月", key="o_month")
+            with c2:
+                out_day = st.checkbox("日", key="o_day")
 
-        if st.checkbox(f"年代（{granularity}年ごと）", key="out_year"):
-            outputs.append({
-                "label": f"年代（{granularity}年ごと）",
-                "group_expr": f"(year / {granularity}) * {granularity}",
-            })
+            out_nums = {}
+            for g in NUMBER_GROUPS:
+                st.caption(g["name"])
+                c1, c2 = st.columns(2)
+                with c1:
+                    out_nums[g["kanzen"]] = st.checkbox("一桁", key=f"o_{g['kanzen']}")
+                with c2:
+                    out_nums[g["moto"]] = st.checkbox("元の数字", key=f"o_{g['moto']}")
 
-        for tl, tk in [("月", "month"), ("日", "day")]:
-            in_filter = tk in filters
-            if st.checkbox(tl, key=f"out_{tk}", disabled=in_filter):
-                outputs.append({"label": tl, "group_expr": tk})
-
-        for g in NUMBER_GROUPS:
-            in_filter_k = g["kanzen"] in filters
-            if st.checkbox(f"{g['name']}（一桁にした値）", key=f"out_{g['kanzen']}", disabled=in_filter_k):
-                outputs.append({
-                    "label": f"{g['name']}（一桁にした値）",
-                    "group_expr": g["kanzen"],
-                })
-            in_filter_m = g["moto"] in filters
-            if st.checkbox(f"{g['name']}（元の数字）", key=f"out_{g['moto']}", disabled=in_filter_m):
-                outputs.append({
-                    "label": f"{g['name']}（元の数字）",
-                    "group_expr": g["moto"],
-                })
+            submitted = st.form_submit_button("▶ 集計する", use_container_width=True)
 
     # ── メイン ──────────────────────────────────────────────────────────────
     st.title("📊 月の数秘®︎ 統計探索")
+
+    if not submitted:
+        st.info("サイドバーで絞り込みとアウトプットを設定してから「集計する」を押してください。")
+        return
 
     if start_year > end_year:
         st.error("開始年は終了年以下にしてください")
         return
 
-    # WHERE句
-    base_params = [start_year, end_year]
-    filter_parts = []
-    filter_params = []
-    for col, val in filters.items():
-        filter_parts.append(f"{col} = ?")
-        filter_params.append(val)
+    # フィルター構築（0 は除外）
+    filters = {}
+    if filt_month > 0:
+        filters["month"] = filt_month
+    if filt_day > 0:
+        filters["day"] = filt_day
+    for col, val in filt_nums.items():
+        if val > 0:
+            filters[col] = val
 
+    base_params = [start_year, end_year]
+    filter_parts = [f"{col} = ?" for col in filters]
     where_all = "WHERE year >= ? AND year <= ?" + (
         " AND " + " AND ".join(filter_parts) if filter_parts else ""
     )
-    all_params = base_params + filter_params
+    all_params = base_params + list(filters.values())
 
     # 対象件数
     try:
@@ -222,24 +229,32 @@ def page_stats():
         st.error(f"クエリエラー: {e}")
         return
 
-    # 絞り込み条件サマリー
-    col_label = {"month": "月", "day": "日"}
-    for g in NUMBER_GROUPS:
-        col_label[g["kanzen"]] = f"{g['name']}（一桁にした値）"
-        col_label[g["moto"]] = f"{g['name']}（元の数字）"
-
     filter_text = "なし" if not filters else "、".join(
-        f"{col_label.get(col, col)} = {val}" for col, val in filters.items()
+        f"{COL_LABEL.get(col, col)} = {val}" for col, val in filters.items()
     )
-
     mc1, mc2 = st.columns([1, 3])
     with mc1:
         st.metric("対象件数", f"{total:,} 件")
     with mc2:
         st.caption(f"期間：{start_year}〜{end_year}年 ／ 絞り込み：{filter_text}")
 
+    # アウトプット収集（絞り込み中の項目は除外）
+    outputs = []
+    if out_year:
+        outputs.append({
+            "label": f"年代（{granularity}年ごと）",
+            "group_expr": f"(year / {granularity}) * {granularity}",
+        })
+    if out_month and "month" not in filters:
+        outputs.append({"label": "月", "group_expr": "month"})
+    if out_day and "day" not in filters:
+        outputs.append({"label": "日", "group_expr": "day"})
+    for col, checked in out_nums.items():
+        if checked and col not in filters:
+            outputs.append({"label": COL_LABEL.get(col, col), "group_expr": col})
+
     if not outputs:
-        st.info("サイドバーの「アウトプット設定」で見たい数字を選ぶとグラフが表示されます。")
+        st.info("アウトプットで見たい数字を選んでから集計してください。")
         return
 
     # 各アウトプットのグラフ
@@ -272,7 +287,7 @@ def page_stats():
         with tab_g:
             fig = px.bar(
                 df, x=lbl, y="割合(%)",
-                title=f"{lbl}の分布（絞り込み {total:,} 件中）",
+                title=f"{lbl}の分布（{total:,}件中）",
                 text="割合(%)",
             )
             fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
