@@ -175,16 +175,19 @@ def page_stats():
             })
 
         for tl, tk in [("月", "month"), ("日", "day")]:
-            if st.checkbox(tl, key=f"out_{tk}"):
+            in_filter = tk in filters
+            if st.checkbox(tl, key=f"out_{tk}", disabled=in_filter):
                 outputs.append({"label": tl, "group_expr": tk})
 
         for g in NUMBER_GROUPS:
-            if st.checkbox(f"{g['name']}（一桁にした値）", key=f"out_{g['kanzen']}"):
+            in_filter_k = g["kanzen"] in filters
+            if st.checkbox(f"{g['name']}（一桁にした値）", key=f"out_{g['kanzen']}", disabled=in_filter_k):
                 outputs.append({
                     "label": f"{g['name']}（一桁にした値）",
                     "group_expr": g["kanzen"],
                 })
-            if st.checkbox(f"{g['name']}（元の数字）", key=f"out_{g['moto']}"):
+            in_filter_m = g["moto"] in filters
+            if st.checkbox(f"{g['name']}（元の数字）", key=f"out_{g['moto']}", disabled=in_filter_m):
                 outputs.append({
                     "label": f"{g['name']}（元の数字）",
                     "group_expr": g["moto"],
