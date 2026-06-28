@@ -333,10 +333,13 @@ def page_stats():
                 for i, c in enumerate(col_list) if is_zorome(int(c))
             ]
 
-            n_cells = len(display.index) * len(display.columns)
-            height = min(max(600, len(display.index) * 60), 2000)
+            row_list = list(display.index)
+            n_cells = len(row_list) * len(col_list)
+            height = min(max(600, len(row_list) * 60), 2000)
             fig = px.imshow(
-                display,
+                display.to_numpy(),
+                x=col_list,
+                y=row_list,
                 labels={"x": lbl, "y": "年代", "color": clabel},
                 title=f"年代（{granularity}年ごと）× {lbl}の{clabel}",
                 color_continuous_scale=colorscale,
