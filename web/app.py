@@ -68,6 +68,14 @@ def fmt_extra(moto: int, kanzen: int) -> str:
     return str(moto) if moto == kanzen else f"{moto}／{kanzen}"
 
 
+def is_zorome(n) -> bool:
+    try:
+        s = str(int(n))
+        return len(s) > 1 and len(set(s)) == 1
+    except (ValueError, TypeError):
+        return False
+
+
 def run_query(sql: str, params: list) -> pd.DataFrame:
     cur = conn.execute(sql, params)
     if not cur.description:
@@ -279,6 +287,7 @@ def page_stats():
             st.warning("該当するデータがありませんでした")
             continue
 
+        bar_colors = ["orange" if is_zorome(v) else "#636EFA" for v in df["val"]]
         df["割合(%)"] = (df["count"] / df["count"].sum() * 100).round(2)
         df = df.rename(columns={"val": lbl, "count": "件数"})
         df[lbl] = df[lbl].astype(str)
@@ -290,7 +299,11 @@ def page_stats():
                 title=f"{lbl}の分布（{total:,}件中）",
                 text="割合(%)",
             )
-            fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
+            fig.update_traces(
+                marker_color=bar_colors,
+                texttemplate="%{text:.1f}%",
+                textposition="outside",
+            )
             fig.update_layout(yaxis_title="割合（%）")
             st.plotly_chart(fig, use_container_width=True)
         with tab_t:
