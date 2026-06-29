@@ -324,16 +324,14 @@ def page_stats():
             pivot.index = [str(int(i)) for i in pivot.index]
             pivot = pivot.sort_index()
 
-            # 0セルを限りなく黒に近いグレーで表示するカスタムスケール
-            _blues_zero_dark = [
-                [0.0,  "rgb(20, 20, 20)"],
-                [0.02, "rgb(210, 228, 245)"],
-                [0.5,  "rgb(107, 174, 214)"],
-                [1.0,  "rgb(8, 48, 107)"],
-            ]
             if hm_mode == "割合（%）":
                 display = pivot.div(pivot.sum(axis=1), axis=0) * 100
-                colorscale, midpoint, zmin_val, fmt, clabel = _blues_zero_dark, None, 0, ".1f", "割合（%）"
+                midpoint, zmin_val, fmt, clabel = None, 0, ".1f", "割合（%）"
+                _dmax = float(display.values.max())
+                _nz = display.values[display.values > 0]
+                _thresh = max(float(_nz.min()) / _dmax * 0.5, 1e-10) if len(_nz) and _dmax > 0 else 0.5
+                colorscale = [[0.0, "rgb(20,20,20)"], [_thresh, "rgb(210,228,245)"],
+                              [0.5, "rgb(107,174,214)"], [1.0, "rgb(8,48,107)"]]
             elif hm_mode == "偏差":
                 pct = pivot.div(pivot.sum(axis=1), axis=0) * 100
                 overall = pivot.sum(axis=0) / pivot.sum().sum() * 100
@@ -341,7 +339,12 @@ def page_stats():
                 colorscale, midpoint, zmin_val, fmt, clabel = "RdBu_r", 0.0, None, ".2f", "偏差（%pt）"
             else:
                 display = pivot
-                colorscale, midpoint, zmin_val, fmt, clabel = _blues_zero_dark, None, 0, ".0f", "発生数"
+                midpoint, zmin_val, fmt, clabel = None, 0, ".0f", "発生数"
+                _dmax = float(display.values.max())
+                _nz = display.values[display.values > 0]
+                _thresh = max(float(_nz.min()) / _dmax * 0.5, 1e-10) if len(_nz) and _dmax > 0 else 0.5
+                colorscale = [[0.0, "rgb(20,20,20)"], [_thresh, "rgb(210,228,245)"],
+                              [0.5, "rgb(107,174,214)"], [1.0, "rgb(8,48,107)"]]
 
             col_list = list(display.columns)
             row_list = list(display.index)
