@@ -326,7 +326,7 @@ def page_stats():
 
             if hm_mode == "割合（%）":
                 display = pivot.div(pivot.sum(axis=1), axis=0) * 100
-                midpoint, zmin_val, fmt, clabel, z_hover = None, 0, ".1f", "割合（%）", "%{z:.1f}%"
+                midpoint, zmin_val, fmt, clabel, z_hover = None, 0, ".2f", "割合（%）", "%{z:.2f}%"
                 _dmax = float(display.values.max())
                 _nz = display.values[display.values > 0]
                 _thresh = max(float(_nz.min()) / _dmax * 0.5, 1e-10) if len(_nz) and _dmax > 0 else 0.5
