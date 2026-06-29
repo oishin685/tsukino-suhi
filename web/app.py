@@ -325,6 +325,14 @@ def page_stats():
             pivot.columns = [str(c) for c in pivot.columns]
             pivot.index = [str(int(i)) for i in pivot.index]
             pivot = pivot.sort_index()
+            # start_year〜effective_end の全年代行を保証（DB にデータがない年代も黒で表示）
+            first_dec = (start_year // granularity) * granularity
+            last_dec = (effective_end // granularity) * granularity
+            for _d in range(first_dec, last_dec + 1, granularity):
+                _ds = str(_d)
+                if _ds not in pivot.index:
+                    pivot.loc[_ds] = 0
+            pivot = pivot.sort_index()
 
             if hm_mode == "割合（%）":
                 display = pivot.div(pivot.sum(axis=1), axis=0) * 100
