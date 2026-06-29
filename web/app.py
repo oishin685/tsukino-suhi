@@ -1,12 +1,20 @@
 import streamlit as st
 import sqlite3
 import os
+import gzip
+import shutil
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import date
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "tsukino_suhi.db")
+_DB_GZ  = os.path.join(os.path.dirname(__file__), "..", "tsukino_suhi.db.gz")
+
+# 圧縮DBが存在して未展開の場合だけ展開する
+if not os.path.exists(DB_PATH) and os.path.exists(_DB_GZ):
+    with gzip.open(_DB_GZ, "rb") as _f_in, open(DB_PATH, "wb") as _f_out:
+        shutil.copyfileobj(_f_in, _f_out)
 
 st.set_page_config(
     page_title="月の数秘®︎ データベース",
