@@ -8,13 +8,14 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import date
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "tsukino_suhi.db")
 _DB_GZ  = os.path.join(os.path.dirname(__file__), "..", "tsukino_suhi.db.gz")
+# /tmp は Streamlit Cloud でも書き込み可能
+DB_PATH = "/tmp/tsukino_suhi.db"
 
 
 @st.cache_resource
 def _setup_db() -> None:
-    """gz から DB を展開。アプリ起動時に1回だけ実行される。"""
+    """gz から /tmp に展開。アプリ起動ごとに1回だけ実行される。"""
     if os.path.exists(_DB_GZ):
         with gzip.open(_DB_GZ, "rb") as f_in, open(DB_PATH, "wb") as f_out:
             shutil.copyfileobj(f_in, f_out)
