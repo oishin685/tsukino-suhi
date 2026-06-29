@@ -102,8 +102,8 @@ def page_search():
     d = st.date_input(
         "生年月日",
         value=date(1990, 1, 1),
-        min_value=date(1900, 1, 1),
-        max_value=date(2500, 12, 31),
+        min_value=date(1, 1, 1),
+        max_value=date(3000, 12, 31),
     )
 
     if not d:
@@ -152,9 +152,9 @@ def page_stats():
 
             c1, c2 = st.columns(2)
             with c1:
-                start_year = int(st.number_input("開始年", 1900, 2500, 1900, step=1))
+                start_year = int(st.number_input("開始年", 0, 3000, 1950, step=1))
             with c2:
-                end_year = int(st.number_input("終了年", 1900, 2500, 2500, step=1))
+                end_year = int(st.number_input("終了年", 0, 3000, 2050, step=1))
 
             c1, c2 = st.columns(2)
             with c1:
@@ -324,17 +324,24 @@ def page_stats():
             pivot.index = [str(int(i)) for i in pivot.index]
             pivot = pivot.sort_index()
 
+            # 0セルを限りなく黒に近いグレーで表示するカスタムスケール
+            _blues_zero_dark = [
+                [0.0,  "rgb(20, 20, 20)"],
+                [0.02, "rgb(210, 228, 245)"],
+                [0.5,  "rgb(107, 174, 214)"],
+                [1.0,  "rgb(8, 48, 107)"],
+            ]
             if hm_mode == "割合（%）":
                 display = pivot.div(pivot.sum(axis=1), axis=0) * 100
-                colorscale, midpoint, fmt, clabel = "Blues", None, ".1f", "割合（%）"
+                colorscale, midpoint, zmin_val, fmt, clabel = _blues_zero_dark, None, 0, ".1f", "割合（%）"
             elif hm_mode == "偏差":
                 pct = pivot.div(pivot.sum(axis=1), axis=0) * 100
                 overall = pivot.sum(axis=0) / pivot.sum().sum() * 100
                 display = pct.sub(overall, axis=1)
-                colorscale, midpoint, fmt, clabel = "RdBu_r", 0.0, ".2f", "偏差（%pt）"
+                colorscale, midpoint, zmin_val, fmt, clabel = "RdBu_r", 0.0, None, ".2f", "偏差（%pt）"
             else:
                 display = pivot
-                colorscale, midpoint, fmt, clabel = "Blues", None, ".0f", "発生数"
+                colorscale, midpoint, zmin_val, fmt, clabel = _blues_zero_dark, None, 0, ".0f", "発生数"
 
             col_list = list(display.columns)
             row_list = list(display.index)
@@ -366,6 +373,7 @@ def page_stats():
                 y=row_list,
                 colorscale=colorscale,
                 zmid=midpoint,
+                zmin=zmin_val,
                 colorbar=dict(title=clabel),
                 text=text_arr,
                 texttemplate="%{text}" if text_arr else "",
