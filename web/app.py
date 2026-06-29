@@ -3,6 +3,7 @@ import sqlite3
 import os
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from datetime import date
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "tsukino_suhi.db")
@@ -301,14 +302,14 @@ def page_stats():
             # 縦=年代、横=数字値
             pivot = df_h.pivot(index="decade", columns="val", values="cnt").fillna(0)
             pivot.columns = pivot.columns.astype(int)
-            # ゾロ目は必ず列として表示（値が0でも）
             for z in zorome_required_for(col):
                 if z not in pivot.columns:
                     pivot[z] = 0
             pivot = pivot.sort_index(axis=1)
+            # インデックス・列は文字列化（カテゴリ軸として扱わせる）
+            pivot.columns = [str(c) for c in pivot.columns]
             pivot.index = [str(int(i)) for i in pivot.index]
             pivot = pivot.sort_index()
-            pivot.columns = [str(c) for c in pivot.columns]  # 文字列化で補間tickを消す
 
             if hm_mode == "割合（%）":
                 display = pivot.div(pivot.sum(axis=1), axis=0) * 100
@@ -322,32 +323,52 @@ def page_stats():
                 display = pivot
                 colorscale, midpoint, fmt, clabel = "Blues", None, ".0f", "発生数"
 
-            # ゾロ目列にオレンジ枠を追加
             col_list = list(display.columns)
+            row_list = list(display.index)
+            n_cells = len(row_list) * len(col_list)
+
+            # ゾロ目列にオレンジ枠（カテゴリ軸のインデックス位置で指定）
             zorome_shapes = [
                 dict(type="rect",
                      x0=i - 0.5, x1=i + 0.5,
-                     y0=-0.5, y1=len(display.index) - 0.5,
+                     y0=-0.5, y1=len(row_list) - 0.5,
                      line=dict(color="orange", width=3),
                      fillcolor="rgba(0,0,0,0)")
                 for i, c in enumerate(col_list) if is_zorome(int(c))
             ]
 
-            row_list = list(display.index)
-            n_cells = len(row_list) * len(col_list)
+            # セル内テキスト
+            if n_cells < 300:
+                fmt_map = {".1f": "{:.1f}", ".2f": "{:.2f}", ".0f": "{:.0f}"}
+                fstr = fmt_map[fmt]
+                text_arr = [[fstr.format(v) for v in row] for row in display.to_numpy()]
+            else:
+                text_arr = None
+
             height = min(max(600, len(row_list) * 60), 2000)
-            fig = px.imshow(
-                display.to_numpy(),
+            # go.Heatmap で軸タイプを明示的にcategoryに固定
+            trace = go.Heatmap(
+                z=display.to_numpy(),
                 x=col_list,
                 y=row_list,
-                labels={"x": lbl, "y": "年代", "color": clabel},
-                title=f"年代（{granularity}年ごと）× {lbl}の{clabel}",
-                color_continuous_scale=colorscale,
-                color_continuous_midpoint=midpoint,
-                text_auto=fmt if n_cells < 300 else False,
-                aspect="auto",
+                colorscale=colorscale,
+                zmid=midpoint,
+                colorbar=dict(title=clabel),
+                text=text_arr,
+                texttemplate="%{text}" if text_arr else "",
+                hoverongaps=False,
             )
-            fig.update_layout(height=height, shapes=zorome_shapes)
+            fig = go.Figure(data=[trace])
+            fig.update_layout(
+                title=f"年代（{granularity}年ごと）× {lbl}の{clabel}",
+                xaxis=dict(type="category", title=lbl,
+                           categoryorder="array", categoryarray=col_list),
+                yaxis=dict(type="category", title="年代",
+                           categoryorder="array", categoryarray=row_list,
+                           autorange="reversed"),
+                height=height,
+                shapes=zorome_shapes,
+            )
             st.plotly_chart(fig, use_container_width=True)
 
     # ── 年代のみ → 通常バーチャート ──────────────────────────────────────────────
