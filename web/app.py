@@ -154,7 +154,7 @@ def page_stats():
             with c1:
                 start_year = int(st.number_input("開始年", 0, 3000, 1950, step=1))
             with c2:
-                end_year = int(st.number_input("終了年", 0, 3000, 2050, step=1))
+                end_year = int(st.number_input("終了年", 0, 3000, 2059, step=1))
 
             c1, c2 = st.columns(2)
             with c1:
