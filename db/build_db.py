@@ -56,7 +56,7 @@ INSERT OR REPLACE INTO dates VALUES (
 """
 
 
-def build(start_year: int = 1000, end_year: int = 2500):
+def build(start_year: int = 1000, end_year: int = 2509):
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(CREATE_TABLE)
