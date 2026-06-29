@@ -378,7 +378,7 @@ def page_stats():
             else:
                 text_arr = None
 
-            height = min(max(600, len(row_list) * 60), 2000)
+            height = max(600, len(row_list) * 40)
             hover_tpl = lbl + ": %{x}<br>年代: %{y}<br>" + clabel + ": " + z_hover + "<extra></extra>"
             # go.Heatmap で軸タイプを明示的にcategoryに固定
             trace = go.Heatmap(
