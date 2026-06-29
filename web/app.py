@@ -233,7 +233,14 @@ def page_stats():
         if val > 0:
             filters[col] = val
 
-    base_params = [start_year, end_year]
+    # 端数の年代を自動除外（年代出力選択時）
+    decade_start_of_end = (end_year // granularity) * granularity
+    if out_year and end_year < decade_start_of_end + granularity - 1:
+        effective_end = decade_start_of_end - 1
+    else:
+        effective_end = end_year
+
+    base_params = [start_year, effective_end]
     filter_parts = [f"{col} = ?" for col in filters]
     where_all = "WHERE year >= ? AND year <= ?" + (
         " AND " + " AND ".join(filter_parts) if filter_parts else ""
@@ -252,11 +259,14 @@ def page_stats():
     filter_text = "なし" if not filters else "、".join(
         f"{COL_LABEL.get(col, col)} = {val}" for col, val in filters.items()
     )
+    period_str = f"{start_year}〜{effective_end}年"
+    if effective_end != end_year:
+        period_str += f"（{end_year}年は端数年代のため除外）"
     mc1, mc2 = st.columns([1, 3])
     with mc1:
         st.metric("対象件数", f"{total:,} 件")
     with mc2:
-        st.caption(f"期間：{start_year}〜{end_year}年 ／ 絞り込み：{filter_text}")
+        st.caption(f"期間：{period_str} ／ 絞り込み：{filter_text}")
 
     # アウトプット収集
     num_out_cols = [col for col, checked in out_nums.items() if checked and col not in filters]
