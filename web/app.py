@@ -11,10 +11,16 @@ from datetime import date
 DB_PATH = os.path.join(os.path.dirname(__file__), "..", "tsukino_suhi.db")
 _DB_GZ  = os.path.join(os.path.dirname(__file__), "..", "tsukino_suhi.db.gz")
 
-# 圧縮DBが存在して未展開の場合だけ展開する
-if not os.path.exists(DB_PATH) and os.path.exists(_DB_GZ):
-    with gzip.open(_DB_GZ, "rb") as _f_in, open(DB_PATH, "wb") as _f_out:
-        shutil.copyfileobj(_f_in, _f_out)
+
+@st.cache_resource
+def _setup_db() -> None:
+    """gz から DB を展開。アプリ起動時に1回だけ実行される。"""
+    if os.path.exists(_DB_GZ):
+        with gzip.open(_DB_GZ, "rb") as f_in, open(DB_PATH, "wb") as f_out:
+            shutil.copyfileobj(f_in, f_out)
+
+
+_setup_db()
 
 st.set_page_config(
     page_title="月の数秘®︎ データベース",
