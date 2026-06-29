@@ -3,25 +3,31 @@ import sqlite3
 import os
 import gzip
 import shutil
+from pathlib import Path
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import date
 
-_DB_GZ  = os.path.join(os.path.dirname(__file__), "..", "tsukino_suhi.db.gz")
+_DB_GZ  = Path(__file__).resolve().parent.parent / "tsukino_suhi.db.gz"
 # /tmp は Streamlit Cloud でも書き込み可能
 DB_PATH = "/tmp/tsukino_suhi.db"
 
 
 @st.cache_resource
-def _setup_db() -> None:
+def _setup_db() -> str:
     """gz から /tmp に展開。アプリ起動ごとに1回だけ実行される。"""
-    if os.path.exists(_DB_GZ):
-        with gzip.open(_DB_GZ, "rb") as f_in, open(DB_PATH, "wb") as f_out:
+    if not _DB_GZ.exists():
+        return f"ERROR: gz not found at {_DB_GZ}"
+    try:
+        with gzip.open(str(_DB_GZ), "rb") as f_in, open(DB_PATH, "wb") as f_out:
             shutil.copyfileobj(f_in, f_out)
+        return "OK"
+    except Exception as e:
+        return f"ERROR: {e}"
 
 
-_setup_db()
+_db_setup_result = _setup_db()
 
 st.set_page_config(
     page_title="月の数秘®︎ データベース",
@@ -226,6 +232,8 @@ def page_stats():
 
     # ── メイン ──────────────────────────────────────────────────────────────
     st.title("📊 月の数秘®︎ 統計探索")
+    if _db_setup_result != "OK":
+        st.error(f"DB初期化エラー: {_db_setup_result}")
     _db_range = run_query("SELECT MIN(year), MAX(year), COUNT(*) AS n FROM dates", [])
     st.caption(f"DB: {int(_db_range.iloc[0,0])}〜{int(_db_range.iloc[0,1])}年 / {int(_db_range.iloc[0,2]):,}件")
 
