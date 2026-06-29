@@ -326,7 +326,7 @@ def page_stats():
 
             if hm_mode == "割合（%）":
                 display = pivot.div(pivot.sum(axis=1), axis=0) * 100
-                midpoint, zmin_val, fmt, clabel = None, 0, ".1f", "割合（%）"
+                midpoint, zmin_val, fmt, clabel, z_hover = None, 0, ".1f", "割合（%）", "%{z:.1f}%"
                 _dmax = float(display.values.max())
                 _nz = display.values[display.values > 0]
                 _thresh = max(float(_nz.min()) / _dmax * 0.5, 1e-10) if len(_nz) and _dmax > 0 else 0.5
@@ -336,10 +336,10 @@ def page_stats():
                 pct = pivot.div(pivot.sum(axis=1), axis=0) * 100
                 overall = pivot.sum(axis=0) / pivot.sum().sum() * 100
                 display = pct.sub(overall, axis=1)
-                colorscale, midpoint, zmin_val, fmt, clabel = "RdBu_r", 0.0, None, ".2f", "偏差（%pt）"
+                colorscale, midpoint, zmin_val, fmt, clabel, z_hover = "RdBu_r", 0.0, None, ".2f", "偏差（%pt）", "%{z:.2f}%pt"
             else:
                 display = pivot
-                midpoint, zmin_val, fmt, clabel = None, 0, ".0f", "発生数"
+                midpoint, zmin_val, fmt, clabel, z_hover = None, 0, ".0f", "発生数", "%{z:.0f}件"
                 _dmax = float(display.values.max())
                 _nz = display.values[display.values > 0]
                 _thresh = max(float(_nz.min()) / _dmax * 0.5, 1e-10) if len(_nz) and _dmax > 0 else 0.5
@@ -369,6 +369,7 @@ def page_stats():
                 text_arr = None
 
             height = min(max(600, len(row_list) * 60), 2000)
+            hover_tpl = lbl + ": %{x}<br>年代: %{y}<br>" + clabel + ": " + z_hover + "<extra></extra>"
             # go.Heatmap で軸タイプを明示的にcategoryに固定
             trace = go.Heatmap(
                 z=display.to_numpy(),
@@ -378,6 +379,7 @@ def page_stats():
                 zmid=midpoint,
                 zmin=zmin_val,
                 colorbar=dict(title=clabel),
+                hovertemplate=hover_tpl,
                 text=text_arr,
                 texttemplate="%{text}" if text_arr else "",
                 hoverongaps=False,
