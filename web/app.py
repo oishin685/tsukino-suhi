@@ -9,14 +9,16 @@ import plotly.express as px
 import plotly.graph_objects as go
 from datetime import date
 
-_DB_GZ  = Path(__file__).resolve().parent.parent / "tsukino_suhi.db.gz"
+_DB_GZ   = Path(__file__).resolve().parent.parent / "tsukino_suhi.db.gz"
 # /tmp は Streamlit Cloud でも書き込み可能
-DB_PATH = "/tmp/tsukino_suhi.db"
+DB_PATH  = "/tmp/tsukino_suhi.db"
+# バージョン文字列を変えるとキャッシュが強制的にリセットされる
+_DB_VER  = "2026-06-30-1000-2509-v3"
 
 
 @st.cache_resource
-def _setup_db() -> str:
-    """gz から /tmp に展開。アプリ起動ごとに1回だけ実行される。"""
+def _setup_db(ver: str) -> str:
+    """gz から /tmp に展開。バージョン変化で再実行される。"""
     if not _DB_GZ.exists():
         return f"ERROR: gz not found at {_DB_GZ}"
     try:
@@ -27,7 +29,7 @@ def _setup_db() -> str:
         return f"ERROR: {e}"
 
 
-_db_setup_result = _setup_db()
+_db_setup_result = _setup_db(_DB_VER)
 
 st.set_page_config(
     page_title="月の数秘®︎ データベース",
@@ -37,13 +39,13 @@ st.set_page_config(
 
 
 @st.cache_resource
-def get_conn():
+def get_conn(ver: str):
     c = sqlite3.connect(DB_PATH, check_same_thread=False)
     c.row_factory = sqlite3.Row
     return c
 
 
-conn = get_conn()
+conn = get_conn(_DB_VER)
 
 # ── 定義 ─────────────────────────────────────────────────────────────────────
 
@@ -234,8 +236,14 @@ def page_stats():
     st.title("📊 月の数秘®︎ 統計探索")
     if _db_setup_result != "OK":
         st.error(f"DB初期化エラー: {_db_setup_result}")
-    _db_range = run_query("SELECT MIN(year), MAX(year), COUNT(*) AS n FROM dates", [])
-    st.caption(f"DB: {int(_db_range.iloc[0,0])}〜{int(_db_range.iloc[0,1])}年 / {int(_db_range.iloc[0,2]):,}件")
+        st.code(f"gz path: {_DB_GZ}\ngz exists: {_DB_GZ.exists()}\ndb path: {DB_PATH}")
+    try:
+        _db_range = run_query("SELECT MIN(year), MAX(year), COUNT(*) AS n FROM dates", [])
+        _yr_min, _yr_max, _yr_n = int(_db_range.iloc[0, 0]), int(_db_range.iloc[0, 1]), int(_db_range.iloc[0, 2])
+        st.info(f"DB: {_yr_min}〜{_yr_max}年 / {_yr_n:,}件")
+    except Exception as e:
+        st.error(f"DB接続エラー: {e}")
+        return
 
     if submitted:
         st.session_state["_stats_ready"] = True
