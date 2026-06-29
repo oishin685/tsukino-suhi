@@ -212,7 +212,10 @@ def page_stats():
     # ── メイン ──────────────────────────────────────────────────────────────
     st.title("📊 月の数秘®︎ 統計探索")
 
-    if not submitted:
+    if submitted:
+        st.session_state["_stats_ready"] = True
+
+    if not st.session_state.get("_stats_ready"):
         st.info("サイドバーで絞り込みとアウトプットを設定してから「集計する」を押してください。")
         return
 
