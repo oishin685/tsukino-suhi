@@ -211,6 +211,8 @@ def page_stats():
 
     # ── メイン ──────────────────────────────────────────────────────────────
     st.title("📊 月の数秘®︎ 統計探索")
+    _db_range = run_query("SELECT MIN(year), MAX(year), COUNT(*) AS n FROM dates", [])
+    st.caption(f"DB: {int(_db_range.iloc[0,0])}〜{int(_db_range.iloc[0,1])}年 / {int(_db_range.iloc[0,2]):,}件")
 
     if submitted:
         st.session_state["_stats_ready"] = True
